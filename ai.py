@@ -4,7 +4,7 @@ from game import Game, WHITE, BLACK, EMPTY
 import copy
 import time
 import random
-
+import operator
 class Node:
     # NOTE: modifying this block is not recommended
     def __init__(self, state, actions, parent=None):
@@ -43,7 +43,7 @@ class AI:
 
             # TODO: select a node, rollout, and backpropagate
             node = self.select(self.root)
-            winner = self.rollout(node)    #{'b': 0, 'w': 1}
+            winner = self.rollout(node)  
             self.backpropagate(node, winner)
             iters += 1
         print()
@@ -59,12 +59,10 @@ class AI:
         # HINT: you can use 'is_terminal' field in class Node to check if node is terminal node
         # NOTE: deterministic_test() requires using c=1 for best_child()
         while not node.is_terminal:
-            if len(node.untried_actions) == 0:
-                return node
             if len(node.untried_actions) != 0:
                 return self.expand(node)
             else:
-                node = self.best_child(node)
+                node = self.best_child(node, c=1)[0][1]
         return node
 
     def expand(self, node):
@@ -77,12 +75,11 @@ class AI:
         # NOTE: You may find the following methods useful:
         #   self.simulator.state()
         #   self.simulator.get_actions()
+        self.simulator.reset(*node.state)
         action = node.untried_actions.pop(0)
-        self.simulator.reset(node.state)
         self.simulator.place(action[0], action[1])
-        child_node = Node(self.simulator.state(), self.simulator.get_actions()) #choose a child node to grow the search tree
+        child_node = Node(self.simulator.state(), self.simulator.get_actions(), node) 
         node.children.append((action, child_node))
-        child_node.parent = node
         return child_node
 
 
@@ -92,27 +89,23 @@ class AI:
         best_child_node = None # to store the child node with best UCB
         best_action = None # to store the action that leads to the best child
         action_ucb_table = {} # to store the UCB values of each child node (for testing)   (action, value)
-        best_child_table = {}   
+        best_child_table = {}
 
         # NOTE: deterministic_test() requires iterating in this order
         for child in node.children:
             # NOTE: deterministic_test() requires, in the case of a tie, choosing the FIRST action with 
             # the maximum upper confidence bound 
             child_state, child_node = child
-            score = 0
-            if child_node.num_visits == 0:
-                score = float('inf')
-            elif child_node.num_visits > 0:
-                score = (child_node.num_wins / child_node.num_visits) + 1 * sqrt(2*log(node.num_visits) / child_node.num_visits)
+            score = (child_node.num_wins / child_node.num_visits) + c * sqrt(2*log(node.num_visits) / child_node.num_visits)
 
             action_ucb_table[child_state] = score
             best_child_table[child_state] = child
-        best_action = max(action_ucb_table)
-        best_child_node = best_child_table[best_action]      
+ 
+        best_action = max(action_ucb_table.items(), key=operator.itemgetter(1))[0]
+        best_child_node = best_child_table[best_action]
         return best_child_node, best_action, action_ucb_table
 
     def backpropagate(self, node, result):
-
         while (node is not None):
             # TODO: backpropagate the information about winner
             # IMPORTANT: each node should store the number of wins for the player of its **parent** node
